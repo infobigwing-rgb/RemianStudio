@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Download, Eye, Loader2, AlertCircle } from "lucide-react"
+import { Search, Download, Eye, Loader2, AlertCircle, RefreshCw } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -9,19 +9,14 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useEditorStore } from "@/lib/store"
-import { EnvatoAuth } from "@/components/auth/EnvatoAuth"
-import { EnvatoDebugPanel } from "@/components/editor/EnvatoDebugPanel"
 import type { EnvatoAsset } from "@/lib/types"
 
 export function EnvatoPanel() {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<EnvatoAsset[]>([])
   const [purchasedTemplates, setPurchasedTemplates] = useState<EnvatoAsset[]>([])
-  const [elementsTemplates, setElementsTemplates] = useState<EnvatoAsset[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingPurchased, setIsLoadingPurchased] = useState(true)
-  const [isLoadingElements, setIsLoadingElements] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [purchasedError, setPurchasedError] = useState<string | null>(null)
   const { addLayer } = useEditorStore()
@@ -30,16 +25,9 @@ export function EnvatoPanel() {
     loadPurchasedTemplates()
   }, [])
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadElementsTemplates()
-    }
-  }, [isAuthenticated])
-
   const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
     for (let i = 0; i < retries; i++) {
       try {
-        console.log(`[v0] Attempt ${i + 1} to fetch: ${url}`)
         const response = await fetch(url)
         if (response.ok || response.status === 401 || response.status === 403) {
           return response
@@ -58,13 +46,10 @@ export function EnvatoPanel() {
   const loadPurchasedTemplates = async () => {
     setIsLoadingPurchased(true)
     setPurchasedError(null)
-    console.log("[v0] Loading purchased templates...")
 
     try {
       const response = await fetchWithRetry("/api/envato/purchases")
       const data = await response.json()
-
-      console.log("[v0] Purchased templates response:", data)
 
       if (!response.ok) {
         throw new Error(data.details || data.error || "Failed to load templates")
@@ -80,39 +65,11 @@ export function EnvatoPanel() {
         isPurchased: true,
       }))
 
-      console.log("[v0] Mapped purchased templates:", mapped.length)
       setPurchasedTemplates(mapped)
     } catch (error) {
-      console.error("[v0] Failed to load purchased templates:", error)
       setPurchasedError(error instanceof Error ? error.message : "Failed to load templates")
     } finally {
       setIsLoadingPurchased(false)
-    }
-  }
-
-  const loadElementsTemplates = async () => {
-    setIsLoadingElements(true)
-    try {
-      const response = await fetch("/api/envato/elements")
-
-      if (response.ok) {
-        const data = await response.json()
-        const mapped: EnvatoAsset[] = (data.results || []).map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
-          previewUrl: item.previewUrl,
-          category: "video-templates",
-          tags: item.tags || [],
-          isPurchased: true,
-          isElements: true,
-        }))
-        setElementsTemplates(mapped)
-      }
-    } catch (error) {
-      console.error("[v0] Failed to load Elements templates:", error)
-    } finally {
-      setIsLoadingElements(false)
     }
   }
 
@@ -121,13 +78,10 @@ export function EnvatoPanel() {
 
     setIsSearching(true)
     setSearchError(null)
-    console.log("[v0] Searching for:", searchQuery)
 
     try {
       const response = await fetchWithRetry(`/api/envato/search?q=${encodeURIComponent(searchQuery)}`)
       const data = await response.json()
-
-      console.log("[v0] Search response:", data)
 
       if (!response.ok) {
         throw new Error(data.details || data.error || "Search failed")
@@ -143,10 +97,8 @@ export function EnvatoPanel() {
         isPurchased: item.isPurchased || false,
       }))
 
-      console.log("[v0] Mapped search results:", mapped.length)
       setSearchResults(mapped)
     } catch (error) {
-      console.error("[v0] Search failed:", error)
       setSearchError(error instanceof Error ? error.message : "Search failed")
       setSearchResults([])
     } finally {
@@ -155,7 +107,6 @@ export function EnvatoPanel() {
   }
 
   const handleApplyTemplate = (asset: EnvatoAsset) => {
-    console.log("[v0] Applying template:", asset.name)
     addLayer({
       id: `template-${asset.id}-${Date.now()}`,
       type: "video",
@@ -200,7 +151,7 @@ export function EnvatoPanel() {
           {asset.isPurchased ? (
             <Button size="sm" className="flex-1" onClick={() => handleApplyTemplate(asset)}>
               <Download className="h-3 w-3 mr-1" />
-              Apply
+              Import
             </Button>
           ) : (
             <Button size="sm" variant="secondary" className="flex-1" disabled>
@@ -215,16 +166,8 @@ export function EnvatoPanel() {
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-border">
-        <h2 className="text-lg font-semibold mb-1">Your Template Library</h2>
+        <h2 className="text-lg font-semibold mb-1">Template Library</h2>
         <p className="text-xs text-muted-foreground">Browse and import Envato templates</p>
-      </div>
-
-      <div className="p-4 border-b border-border">
-        <EnvatoDebugPanel />
-      </div>
-
-      <div className="p-4 border-b border-border">
-        <EnvatoAuth onAuthChange={setIsAuthenticated} />
       </div>
 
       <Tabs defaultValue="purchased" className="flex-1 flex flex-col">
@@ -232,11 +175,6 @@ export function EnvatoPanel() {
           <TabsTrigger value="purchased" className="flex-1">
             Purchased
           </TabsTrigger>
-          {isAuthenticated && (
-            <TabsTrigger value="elements" className="flex-1">
-              Elements
-            </TabsTrigger>
-          )}
           <TabsTrigger value="search" className="flex-1">
             Search
           </TabsTrigger>
@@ -257,6 +195,7 @@ export function EnvatoPanel() {
                       className="mt-2 bg-transparent"
                       onClick={loadPurchasedTemplates}
                     >
+                      <RefreshCw className="h-3 w-3 mr-1" />
                       Retry
                     </Button>
                   </AlertDescription>
@@ -278,27 +217,6 @@ export function EnvatoPanel() {
             </div>
           </ScrollArea>
         </TabsContent>
-
-        {isAuthenticated && (
-          <TabsContent value="elements" className="flex-1 m-0 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="p-4">
-                {isLoadingElements ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : elementsTemplates.length > 0 ? (
-                  <div className="space-y-3">{elementsTemplates.map(renderAssetCard)}</div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <p>No Elements templates found</p>
-                    <p className="text-sm mt-1">Check your Envato Elements subscription</p>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        )}
 
         <TabsContent value="search" className="flex-1 m-0 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-border">
@@ -324,6 +242,7 @@ export function EnvatoPanel() {
                     <div className="font-semibold">Search failed</div>
                     <div className="text-sm mt-1">{searchError}</div>
                     <Button size="sm" variant="outline" className="mt-2 bg-transparent" onClick={handleSearch}>
+                      <RefreshCw className="h-3 w-3 mr-1" />
                       Retry
                     </Button>
                   </AlertDescription>

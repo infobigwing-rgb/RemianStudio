@@ -5,10 +5,11 @@ import { Timeline } from "@/components/editor/Timeline"
 import { EnvatoPanel } from "@/components/editor/EnvatoPanel"
 import { PropertiesPanel } from "@/components/editor/PropertiesPanel"
 import { MediaLibrary } from "@/components/editor/MediaLibrary"
+import { LayersPanel } from "@/components/editor/LayersPanel"
 import { ExportDialog } from "@/components/editor/ExportDialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Download, Save } from "lucide-react"
+import { Download, Save, Plus } from "lucide-react"
 import { useEditorStore } from "@/lib/store"
 import { useState } from "react"
 
@@ -51,6 +52,7 @@ export default function EditorPage() {
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleAddTextLayer}>
+            <Plus className="h-4 w-4 mr-2" />
             Add Text
           </Button>
           <Button variant="outline" size="sm">
@@ -66,23 +68,30 @@ export default function EditorPage() {
 
       {/* Main Editor Layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <Tabs defaultValue="envato" className="w-80 border-r border-border bg-card flex flex-col">
+        {/* Left Sidebar - Templates & Media */}
+        <Tabs defaultValue="templates" className="w-80 border-r border-border bg-card flex flex-col">
           <TabsList className="w-full rounded-none border-b border-border">
-            <TabsTrigger value="envato" className="flex-1">
+            <TabsTrigger value="templates" className="flex-1">
               Templates
             </TabsTrigger>
             <TabsTrigger value="media" className="flex-1">
               Media
             </TabsTrigger>
+            <TabsTrigger value="layers" className="flex-1">
+              Layers
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="envato" className="flex-1 m-0 overflow-hidden">
+          <TabsContent value="templates" className="flex-1 m-0 overflow-hidden">
             <EnvatoPanel />
           </TabsContent>
 
           <TabsContent value="media" className="flex-1 m-0 overflow-hidden">
             <MediaLibrary />
+          </TabsContent>
+
+          <TabsContent value="layers" className="flex-1 m-0 overflow-hidden">
+            <LayersPanel />
           </TabsContent>
         </Tabs>
 
