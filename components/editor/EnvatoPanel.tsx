@@ -1,24 +1,56 @@
 "use client"
 
-import { useState } from "react"
-import { Search, Download, Eye } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, Download, Eye, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useEditorStore } from "@/lib/store"
 import type { EnvatoAsset } from "@/lib/types"
 
 export function EnvatoPanel() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [assets, setAssets] = useState<EnvatoAsset[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [searchResults, setSearchResults] = useState<EnvatoAsset[]>([])
+  const [purchasedTemplates, setPurchasedTemplates] = useState<EnvatoAsset[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [isLoadingPurchased, setIsLoadingPurchased] = useState(true)
   const { addLayer } = useEditorStore()
+
+  useEffect(() => {
+    loadPurchasedTemplates()
+  }, [])
+
+  const loadPurchasedTemplates = async () => {
+    setIsLoadingPurchased(true)
+    try {
+      const response = await fetch("/api/envato/purchases")
+
+      if (response.ok) {
+        const data = await response.json()
+        const mapped: EnvatoAsset[] = data.purchases.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
+          previewUrl: item.previewUrl,
+          category: "video-templates",
+          tags: item.tags || [],
+          isPurchased: true,
+        }))
+        setPurchasedTemplates(mapped)
+      }
+    } catch (error) {
+      console.error("Failed to load purchased templates:", error)
+    } finally {
+      setIsLoadingPurchased(false)
+    }
+  }
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
 
-    setIsLoading(true)
+    setIsSearching(true)
     try {
       const response = await fetch(`/api/envato/search?q=${encodeURIComponent(searchQuery)}`)
 
@@ -27,141 +59,148 @@ export function EnvatoPanel() {
       }
 
       const data = await response.json()
-
-      const mappedAssets: EnvatoAsset[] = data.results.map((item: any) => ({
+      const mapped: EnvatoAsset[] = data.results.map((item: any) => ({
         id: item.id,
         name: item.name,
         thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
         previewUrl: item.previewUrl,
         category: "video-templates",
         tags: item.tags || [],
-        isPurchased: item.isPurchased,
-        templateData: {
-          layers: [
-            { name: "Background", type: "video", isPlaceholder: false },
-            { name: "Title Text", type: "text", isPlaceholder: true },
-          ],
-          placeholders: [{ id: "title", name: "Title", type: "text", defaultValue: "Your Title" }],
-        },
+        isPurchased: item.isPurchased || false,
       }))
 
-      setAssets(mappedAssets)
+      setSearchResults(mapped)
     } catch (error) {
       console.error("Search failed:", error)
-      setAssets([
-        {
-          id: "1",
-          name: "Corporate Intro Template",
-          thumbnail: "/placeholder.svg?height=200&width=300",
-          category: "video-templates",
-          tags: ["corporate", "intro", "business"],
-          isPurchased: true,
-          templateData: {
-            layers: [
-              { name: "Background", type: "video", isPlaceholder: false },
-              { name: "Logo", type: "image", isPlaceholder: true },
-              { name: "Title Text", type: "text", isPlaceholder: true },
-            ],
-            placeholders: [
-              { id: "logo", name: "Logo", type: "image" },
-              { id: "title", name: "Title", type: "text", defaultValue: "Your Company" },
-            ],
-          },
-        },
-        {
-          id: "2",
-          name: "Social Media Promo",
-          thumbnail: "/placeholder.svg?height=200&width=300",
-          category: "video-templates",
-          tags: ["social", "promo", "instagram"],
-          isPurchased: true,
-        },
-      ])
+      setSearchResults([])
     } finally {
-      setIsLoading(false)
+      setIsSearching(false)
     }
   }
 
   const handleApplyTemplate = (asset: EnvatoAsset) => {
-    if (asset.templateData) {
-      asset.templateData.layers.forEach((templateLayer, index) => {
-        addLayer({
-          id: `${asset.id}-${index}`,
-          type: templateLayer.type as any,
-          name: templateLayer.name,
-          startTime: 0,
-          duration: 5,
-          track: index,
-          content: templateLayer.isPlaceholder ? "Edit Me" : undefined,
-          properties: {
-            x: 100,
-            y: 100 + index * 50,
-            width: 400,
-            height: 100,
-            opacity: 1,
-            rotation: 0,
-          },
-        })
-      })
-    }
+    addLayer({
+      id: `template-${asset.id}-${Date.now()}`,
+      type: "video",
+      name: asset.name,
+      startTime: 0,
+      duration: 5,
+      track: 0,
+      properties: {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+        opacity: 1,
+        rotation: 0,
+      },
+    })
   }
 
-  return (
-    <div className="w-80 border-r border-border bg-card flex flex-col">
-      <div className="p-4 border-b border-border">
-        <h2 className="text-lg font-semibold mb-3">Envato Templates</h2>
+  const renderAssetCard = (asset: EnvatoAsset) => (
+    <Card key={asset.id} className="overflow-hidden">
+      <img src={asset.thumbnail || "/placeholder.svg"} alt={asset.name} className="w-full h-40 object-cover" />
+      <div className="p-3">
+        <h3 className="font-medium text-sm mb-1 line-clamp-1">{asset.name}</h3>
+        {asset.tags.length > 0 && (
+          <div className="flex gap-1 flex-wrap mb-2">
+            {asset.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="text-xs bg-secondary px-2 py-0.5 rounded">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2">
-          <Input
-            placeholder="Search templates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          />
-          <Button size="icon" onClick={handleSearch} disabled={isLoading}>
-            <Search className="h-4 w-4" />
-          </Button>
+          {asset.previewUrl && (
+            <Button size="sm" variant="outline" className="flex-1 bg-transparent" asChild>
+              <a href={asset.previewUrl} target="_blank" rel="noopener noreferrer">
+                <Eye className="h-3 w-3 mr-1" />
+                Preview
+              </a>
+            </Button>
+          )}
+          {asset.isPurchased ? (
+            <Button size="sm" className="flex-1" onClick={() => handleApplyTemplate(asset)}>
+              <Download className="h-3 w-3 mr-1" />
+              Apply
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" className="flex-1" disabled>
+              Not Purchased
+            </Button>
+          )}
         </div>
       </div>
+    </Card>
+  )
 
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-3">
-          {assets.map((asset) => (
-            <Card key={asset.id} className="overflow-hidden">
-              <img
-                src={asset.thumbnail || "/placeholder.svg?height=200&width=300"}
-                alt={asset.name}
-                className="w-full h-40 object-cover"
+  return (
+    <div className="flex flex-col h-full">
+      <div className="p-4 border-b border-border">
+        <h2 className="text-lg font-semibold mb-1">Your Template Library</h2>
+        <p className="text-xs text-muted-foreground">Browse and import Envato templates</p>
+      </div>
+
+      <Tabs defaultValue="purchased" className="flex-1 flex flex-col">
+        <TabsList className="w-full rounded-none border-b border-border">
+          <TabsTrigger value="purchased" className="flex-1">
+            Purchased
+          </TabsTrigger>
+          <TabsTrigger value="search" className="flex-1">
+            Search
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="purchased" className="flex-1 m-0 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="p-4">
+              {isLoadingPurchased ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : purchasedTemplates.length > 0 ? (
+                <div className="space-y-3">{purchasedTemplates.map(renderAssetCard)}</div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>No purchased templates found</p>
+                  <p className="text-sm mt-1">Search for templates to purchase</p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="search" className="flex-1 m-0 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-border">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search Envato marketplace..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
-              <div className="p-3">
-                <h3 className="font-medium text-sm mb-1">{asset.name}</h3>
-                <div className="flex gap-1 flex-wrap mb-2">
-                  {asset.tags.slice(0, 3).map((tag) => (
-                    <span key={tag} className="text-xs bg-secondary px-2 py-0.5 rounded">
-                      {tag}
-                    </span>
-                  ))}
+              <Button size="icon" onClick={handleSearch} disabled={isSearching}>
+                {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1">
+            <div className="p-4">
+              {searchResults.length > 0 ? (
+                <div className="space-y-3">{searchResults.map(renderAssetCard)}</div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Search className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>Search for video templates</p>
+                  <p className="text-sm mt-1">Enter keywords to find templates</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 bg-transparent">
-                    <Eye className="h-3 w-3 mr-1" />
-                    Preview
-                  </Button>
-                  {asset.isPurchased ? (
-                    <Button size="sm" className="flex-1" onClick={() => handleApplyTemplate(asset)}>
-                      <Download className="h-3 w-3 mr-1" />
-                      Apply
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="secondary" className="flex-1" disabled>
-                      Purchase
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </ScrollArea>
+              )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

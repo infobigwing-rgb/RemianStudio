@@ -6,17 +6,15 @@ import { EnvatoPanel } from "@/components/editor/EnvatoPanel"
 import { PropertiesPanel } from "@/components/editor/PropertiesPanel"
 import { MediaLibrary } from "@/components/editor/MediaLibrary"
 import { ExportDialog } from "@/components/editor/ExportDialog"
-import { ImportDialog } from "@/components/import/ImportDialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Download, Save, Upload, Sparkles } from "lucide-react"
+import { Download, Save } from "lucide-react"
 import { useEditorStore } from "@/lib/store"
 import { useState } from "react"
 
 export default function EditorPage() {
   const { project, addLayer } = useEditorStore()
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
-  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   const handleAddTextLayer = () => {
     addLayer({
@@ -42,29 +40,16 @@ export default function EditorPage() {
     setExportDialogOpen(true)
   }
 
-  const handleImport = () => {
-    setImportDialogOpen(true)
-  }
-
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Toolbar */}
       <div className="h-14 border-b border-border bg-card flex items-center justify-between px-4">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Remian Studio
-            </h1>
-          </div>
+          <h1 className="text-xl font-bold">Remian Studio</h1>
           <span className="text-sm text-muted-foreground">{project.name}</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleImport}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import Project
-          </Button>
           <Button variant="outline" size="sm" onClick={handleAddTextLayer}>
             Add Text
           </Button>
@@ -113,7 +98,6 @@ export default function EditorPage() {
 
       {/* Dialogs */}
       <ExportDialog open={exportDialogOpen} onOpenChange={setExportDialogOpen} />
-      <ImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
     </div>
   )
 }
