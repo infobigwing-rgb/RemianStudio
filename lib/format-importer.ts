@@ -2,6 +2,8 @@ import type { ImportedProject, CompatibilityReport, Project } from "./types"
 import { PremiereParser } from "./parsers/premiere-parser"
 import { AfterEffectsParser } from "./parsers/after-effects-parser"
 import { FinalCutParser } from "./parsers/final-cut-parser"
+import { AppleMotionParser } from "./parsers/apple-motion-parser"
+import { DaVinciResolveParser } from "./parsers/davinci-resolve-parser"
 
 export class FormatImporter {
   async importFile(file: File): Promise<ImportedProject> {
@@ -37,6 +39,22 @@ export class FormatImporter {
           break
         }
 
+        case "appleMotion": {
+          const parser = new AppleMotionParser()
+          const motionProject = await parser.parse(content)
+          project = parser.convertToProject(motionProject)
+          warnings = this.getMotionWarnings(motionProject)
+          break
+        }
+
+        case "davinciResolve": {
+          const parser = new DaVinciResolveParser()
+          const resolveProject = await parser.parse(content)
+          project = parser.convertToProject(resolveProject)
+          warnings = this.getResolveWarnings(resolveProject)
+          break
+        }
+
         default:
           throw new Error(`Unsupported format: ${format}`)
       }
@@ -55,8 +73,19 @@ export class FormatImporter {
     }
   }
 
-  private detectFormat(filename: string, content: string): "premiere" | "afterEffects" | "finalCut" {
+  private detectFormat(
+    filename: string,
+    content: string,
+  ): "premiere" | "afterEffects" | "finalCut" | "appleMotion" | "davinciResolve" {
     const ext = filename.toLowerCase()
+
+    if (ext.endsWith(".motn")) {
+      return "appleMotion"
+    }
+
+    if (ext.endsWith(".drp")) {
+      return "davinciResolve"
+    }
 
     if (ext.endsWith(".prproj") || ext.endsWith(".xml")) {
       if (content.includes("PremiereData") || content.includes("xmeml")) {
@@ -158,6 +187,22 @@ export class FormatImporter {
       warnings.push(`Project contains ${project.events.length} events. Only the first event was imported.`)
     }
 
+    return warnings
+  }
+
+  private getMotionWarnings(project: any): string[] {
+    const warnings: string[] = []
+    if (project.project?.layers?.some((l: any) => l.behaviors?.length > 0)) {
+      warnings.push("Motion behaviors have been converted to keyframe animations.")
+    }
+    return warnings
+  }
+
+  private getResolveWarnings(project: any): string[] {
+    const warnings: string[] = []
+    if (project.timeline?.clips?.some((c: any) => c.grading)) {
+      warnings.push("DaVinci Resolve color grading has been converted to web-compatible format.")
+    }
     return warnings
   }
 }

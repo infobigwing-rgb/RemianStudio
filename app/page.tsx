@@ -7,15 +7,17 @@ import { PropertiesPanel } from "@/components/editor/PropertiesPanel"
 import { MediaLibrary } from "@/components/editor/MediaLibrary"
 import { LayersPanel } from "@/components/editor/LayersPanel"
 import { ExportDialog } from "@/components/editor/ExportDialog"
+import { ImportDialog } from "@/components/editor/ImportDialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Download, Save, Plus } from "lucide-react"
+import { Download, Save, Plus, FileUp } from "lucide-react"
 import { useEditorStore } from "@/lib/store"
 import { useState } from "react"
 
 export default function EditorPage() {
   const { project, addLayer } = useEditorStore()
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   const handleAddTextLayer = () => {
     addLayer({
@@ -51,6 +53,10 @@ export default function EditorPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+            <FileUp className="h-4 w-4 mr-2" />
+            Import
+          </Button>
           <Button variant="outline" size="sm" onClick={handleAddTextLayer}>
             <Plus className="h-4 w-4 mr-2" />
             Add Text
@@ -107,6 +113,7 @@ export default function EditorPage() {
 
       {/* Dialogs */}
       <ExportDialog open={exportDialogOpen} onOpenChange={setExportDialogOpen} />
+      <ImportDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
     </div>
   )
 }
