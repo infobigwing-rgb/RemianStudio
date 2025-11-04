@@ -1,14 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Download, Eye, Loader2 } from "lucide-react"
+import { Search, Download, Eye, Loader2, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useEditorStore } from "@/lib/store"
 import { EnvatoAuth } from "@/components/auth/EnvatoAuth"
+import { EnvatoDebugPanel } from "@/components/editor/EnvatoDebugPanel"
 import type { EnvatoAsset } from "@/lib/types"
 
 export function EnvatoPanel() {
@@ -20,6 +22,8 @@ export function EnvatoPanel() {
   const [isLoadingPurchased, setIsLoadingPurchased] = useState(true)
   const [isLoadingElements, setIsLoadingElements] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [purchasedError, setPurchasedError] = useState<string | null>(null)
   const { addLayer } = useEditorStore()
 
   useEffect(() => {
@@ -32,26 +36,55 @@ export function EnvatoPanel() {
     }
   }, [isAuthenticated])
 
+  const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        console.log(`[v0] Attempt ${i + 1} to fetch: ${url}`)
+        const response = await fetch(url)
+        if (response.ok || response.status === 401 || response.status === 403) {
+          return response
+        }
+        if (i < retries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)))
+        }
+      } catch (error) {
+        if (i === retries - 1) throw error
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)))
+      }
+    }
+    throw new Error("Max retries reached")
+  }
+
   const loadPurchasedTemplates = async () => {
     setIsLoadingPurchased(true)
-    try {
-      const response = await fetch("/api/envato/purchases")
+    setPurchasedError(null)
+    console.log("[v0] Loading purchased templates...")
 
-      if (response.ok) {
-        const data = await response.json()
-        const mapped: EnvatoAsset[] = (data.results || []).map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
-          previewUrl: item.previewUrl,
-          category: "video-templates",
-          tags: item.tags || [],
-          isPurchased: true,
-        }))
-        setPurchasedTemplates(mapped)
+    try {
+      const response = await fetchWithRetry("/api/envato/purchases")
+      const data = await response.json()
+
+      console.log("[v0] Purchased templates response:", data)
+
+      if (!response.ok) {
+        throw new Error(data.details || data.error || "Failed to load templates")
       }
+
+      const mapped: EnvatoAsset[] = (data.results || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
+        previewUrl: item.previewUrl,
+        category: "video-templates",
+        tags: item.tags || [],
+        isPurchased: true,
+      }))
+
+      console.log("[v0] Mapped purchased templates:", mapped.length)
+      setPurchasedTemplates(mapped)
     } catch (error) {
-      console.error("Failed to load purchased templates:", error)
+      console.error("[v0] Failed to load purchased templates:", error)
+      setPurchasedError(error instanceof Error ? error.message : "Failed to load templates")
     } finally {
       setIsLoadingPurchased(false)
     }
@@ -77,7 +110,7 @@ export function EnvatoPanel() {
         setElementsTemplates(mapped)
       }
     } catch (error) {
-      console.error("Failed to load Elements templates:", error)
+      console.error("[v0] Failed to load Elements templates:", error)
     } finally {
       setIsLoadingElements(false)
     }
@@ -87,15 +120,20 @@ export function EnvatoPanel() {
     if (!searchQuery.trim()) return
 
     setIsSearching(true)
+    setSearchError(null)
+    console.log("[v0] Searching for:", searchQuery)
+
     try {
-      const response = await fetch(`/api/envato/search?q=${encodeURIComponent(searchQuery)}`)
+      const response = await fetchWithRetry(`/api/envato/search?q=${encodeURIComponent(searchQuery)}`)
+      const data = await response.json()
+
+      console.log("[v0] Search response:", data)
 
       if (!response.ok) {
-        throw new Error("Search failed")
+        throw new Error(data.details || data.error || "Search failed")
       }
 
-      const data = await response.json()
-      const mapped: EnvatoAsset[] = data.results.map((item: any) => ({
+      const mapped: EnvatoAsset[] = (data.results || []).map((item: any) => ({
         id: item.id,
         name: item.name,
         thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
@@ -105,9 +143,11 @@ export function EnvatoPanel() {
         isPurchased: item.isPurchased || false,
       }))
 
+      console.log("[v0] Mapped search results:", mapped.length)
       setSearchResults(mapped)
     } catch (error) {
-      console.error("Search failed:", error)
+      console.error("[v0] Search failed:", error)
+      setSearchError(error instanceof Error ? error.message : "Search failed")
       setSearchResults([])
     } finally {
       setIsSearching(false)
@@ -115,6 +155,7 @@ export function EnvatoPanel() {
   }
 
   const handleApplyTemplate = (asset: EnvatoAsset) => {
+    console.log("[v0] Applying template:", asset.name)
     addLayer({
       id: `template-${asset.id}-${Date.now()}`,
       type: "video",
@@ -179,6 +220,10 @@ export function EnvatoPanel() {
       </div>
 
       <div className="p-4 border-b border-border">
+        <EnvatoDebugPanel />
+      </div>
+
+      <div className="p-4 border-b border-border">
         <EnvatoAuth onAuthChange={setIsAuthenticated} />
       </div>
 
@@ -200,6 +245,24 @@ export function EnvatoPanel() {
         <TabsContent value="purchased" className="flex-1 m-0 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4">
+              {purchasedError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="font-semibold">Failed to load purchased templates</div>
+                    <div className="text-sm mt-1">{purchasedError}</div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 bg-transparent"
+                      onClick={loadPurchasedTemplates}
+                    >
+                      Retry
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {isLoadingPurchased ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -254,6 +317,19 @@ export function EnvatoPanel() {
 
           <ScrollArea className="flex-1">
             <div className="p-4">
+              {searchError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="font-semibold">Search failed</div>
+                    <div className="text-sm mt-1">{searchError}</div>
+                    <Button size="sm" variant="outline" className="mt-2 bg-transparent" onClick={handleSearch}>
+                      Retry
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {searchResults.length > 0 ? (
                 <div className="space-y-3">{searchResults.map(renderAssetCard)}</div>
               ) : (
