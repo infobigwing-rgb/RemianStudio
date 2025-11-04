@@ -85,6 +85,7 @@ export interface EnvatoAsset {
   category: string
   tags: string[]
   isPurchased: boolean
+  isElements?: boolean // Added flag for Elements subscription assets
   templateData?: {
     layers: Array<{
       name: string

@@ -8,19 +8,29 @@ import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useEditorStore } from "@/lib/store"
+import { EnvatoAuth } from "@/components/auth/EnvatoAuth"
 import type { EnvatoAsset } from "@/lib/types"
 
 export function EnvatoPanel() {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<EnvatoAsset[]>([])
   const [purchasedTemplates, setPurchasedTemplates] = useState<EnvatoAsset[]>([])
+  const [elementsTemplates, setElementsTemplates] = useState<EnvatoAsset[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingPurchased, setIsLoadingPurchased] = useState(true)
+  const [isLoadingElements, setIsLoadingElements] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const { addLayer } = useEditorStore()
 
   useEffect(() => {
     loadPurchasedTemplates()
   }, [])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadElementsTemplates()
+    }
+  }, [isAuthenticated])
 
   const loadPurchasedTemplates = async () => {
     setIsLoadingPurchased(true)
@@ -29,7 +39,7 @@ export function EnvatoPanel() {
 
       if (response.ok) {
         const data = await response.json()
-        const mapped: EnvatoAsset[] = data.purchases.map((item: any) => ({
+        const mapped: EnvatoAsset[] = (data.results || []).map((item: any) => ({
           id: item.id,
           name: item.name,
           thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
@@ -44,6 +54,32 @@ export function EnvatoPanel() {
       console.error("Failed to load purchased templates:", error)
     } finally {
       setIsLoadingPurchased(false)
+    }
+  }
+
+  const loadElementsTemplates = async () => {
+    setIsLoadingElements(true)
+    try {
+      const response = await fetch("/api/envato/elements")
+
+      if (response.ok) {
+        const data = await response.json()
+        const mapped: EnvatoAsset[] = (data.results || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          thumbnail: item.thumbnailUrl || "/placeholder.svg?height=200&width=300",
+          previewUrl: item.previewUrl,
+          category: "video-templates",
+          tags: item.tags || [],
+          isPurchased: true,
+          isElements: true,
+        }))
+        setElementsTemplates(mapped)
+      }
+    } catch (error) {
+      console.error("Failed to load Elements templates:", error)
+    } finally {
+      setIsLoadingElements(false)
     }
   }
 
@@ -142,11 +178,20 @@ export function EnvatoPanel() {
         <p className="text-xs text-muted-foreground">Browse and import Envato templates</p>
       </div>
 
+      <div className="p-4 border-b border-border">
+        <EnvatoAuth onAuthChange={setIsAuthenticated} />
+      </div>
+
       <Tabs defaultValue="purchased" className="flex-1 flex flex-col">
         <TabsList className="w-full rounded-none border-b border-border">
           <TabsTrigger value="purchased" className="flex-1">
             Purchased
           </TabsTrigger>
+          {isAuthenticated && (
+            <TabsTrigger value="elements" className="flex-1">
+              Elements
+            </TabsTrigger>
+          )}
           <TabsTrigger value="search" className="flex-1">
             Search
           </TabsTrigger>
@@ -170,6 +215,27 @@ export function EnvatoPanel() {
             </div>
           </ScrollArea>
         </TabsContent>
+
+        {isAuthenticated && (
+          <TabsContent value="elements" className="flex-1 m-0 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="p-4">
+                {isLoadingElements ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : elementsTemplates.length > 0 ? (
+                  <div className="space-y-3">{elementsTemplates.map(renderAssetCard)}</div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p>No Elements templates found</p>
+                    <p className="text-sm mt-1">Check your Envato Elements subscription</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        )}
 
         <TabsContent value="search" className="flex-1 m-0 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-border">
